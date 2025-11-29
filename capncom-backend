@@ -1,0 +1,28 @@
+# إنشاء المستودع محلياً
+mkdir capncom-server
+cd capncom-server
+
+# تهيئة git
+git init
+
+# إنشاء الهيكل
+mkdir -p src/routes src/middleware src/models src/config
+mkdir -p uploads/apps uploads/images database logs public
+
+# إنشاء الملفات
+touch package.json .gitignore README.md .env.example ecosystem.config.js
+touch src/server.js
+touch src/routes/auth.js src/routes/apps.js src/routes/uploads.js
+touch src/config/database.js
+touch uploads/.gitkeep uploads/apps/.gitkeep uploads/images/.gitkeep
+touch database/.gitkeep logs/.gitkeep
+
+# إضافة الملفات إلى git
+git add .
+git commit -m "Initial commit: CAPNCom Server"
+
+# رفع إلى GitHub (بعد إنشاء المستودع على GitHub)
+git remote add origin https://github.com/your-username/server.git
+git branch -M main
+git push -u origin main
+
