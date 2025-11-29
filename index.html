@@ -1258,8 +1258,11 @@
 </div>
 
 <script>
-// إعدادات السيرفر - تغيير هذا لعنوان السيرفر الخاص بك
-const API_BASE_URL = 'http://localhost:3000/api';
+// إعدادات التطبيق
+const APP_CONFIG = {
+    storageType: 'localStorage', // 'localStorage' أو 'firebase'
+    firebaseConfig: null // سيتم تعبئته لاحقاً
+};
 
 // حالة التطبيق
 let currentUser = null;
@@ -1277,60 +1280,36 @@ document.addEventListener('DOMContentLoaded', function() {
 async function initializeApp() {
     await checkCurrentUser();
     await loadPlatformStats();
+    await loadAllApps();
 }
 
-// التحقق من المستخدم الحالي مع السيرفر
+// التحقق من المستخدم الحالي
 async function checkCurrentUser() {
-    const token = localStorage.getItem('authToken');
+    const savedUser = localStorage.getItem('currentUser');
     const savedRole = localStorage.getItem('userRole');
     
-    if (token && savedRole) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/auth/me`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-            
-            if (response.ok) {
-                const userData = await response.json();
-                currentUser = userData;
-                userRole = savedRole;
-                
-                if (userRole === 'developer') {
-                    showDeveloperDashboard();
-                } else {
-                    showUserDashboard();
-                }
-            } else {
-                // Token غير صالح
-                localStorage.removeItem('authToken');
-                localStorage.removeItem('userRole');
-            }
-        } catch (error) {
-            console.error('Error checking user:', error);
+    if (savedUser && savedRole) {
+        currentUser = JSON.parse(savedUser);
+        userRole = savedRole;
+        
+        if (userRole === 'developer') {
+            showDeveloperDashboard();
+        } else {
+            showUserDashboard();
         }
     }
 }
 
-// تحميل إحصائيات المنصة من السيرفر
+// تحميل إحصائيات المنصة
 async function loadPlatformStats() {
     try {
-        const response = await fetch(`${API_BASE_URL}/stats`);
-        if (response.ok) {
-            const stats = await response.json();
-            document.getElementById('totalApps').textContent = stats.totalApps.toLocaleString();
-            document.getElementById('totalDevelopers').textContent = stats.totalDevelopers.toLocaleString();
-            document.getElementById('totalDownloads').textContent = stats.totalDownloads.toLocaleString();
-            document.getElementById('totalUsers').textContent = stats.totalUsers.toLocaleString();
-        }
-    } catch (error) {
-        console.error('Error loading platform stats:', error);
-        // استخدام إحصائيات افتراضية في حالة الخطأ
+        // استخدام إحصائيات افتراضية
         document.getElementById('totalApps').textContent = '1,247';
         document.getElementById('totalDevelopers').textContent = '358';
         document.getElementById('totalDownloads').textContent = '45,892';
         document.getElementById('totalUsers').textContent = '12,475';
+    } catch (error) {
+        console.error('Error loading platform stats:', error);
     }
 }
 
@@ -1344,7 +1323,7 @@ function selectRole(role) {
     }
 }
 
-// تسجيل المطور مع السيرفر
+// تسجيل المطور
 async function registerDeveloper() {
     const name = document.getElementById('devName').value;
     const email = document.getElementById('devEmail').value;
@@ -1361,45 +1340,31 @@ async function registerDeveloper() {
     }
     
     try {
-        const response = await fetch(`${API_BASE_URL}/auth/register/developer`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                name,
-                email,
-                password,
-                role: 'developer'
-            })
-        });
+        const developer = {
+            id: generateId(),
+            name: name,
+            email: email,
+            role: 'developer',
+            createdAt: new Date().toISOString()
+        };
         
-        const data = await response.json();
+        // حفظ محلي
+        saveUserLocal(developer);
+        currentUser = developer;
         
-        if (response.ok) {
-            // حفظ التوكن والمعلومات
-            localStorage.setItem('authToken', data.token);
-            localStorage.setItem('userRole', 'developer');
-            
-            currentUser = data.user;
-            userRole = 'developer';
-            
-            showMessage('devAuthMsg', 'تم إنشاء حساب المطور بنجاح!', 'success');
-            
-            setTimeout(() => {
-                showDeveloperDashboard();
-            }, 1500);
-        } else {
-            showMessage('devAuthMsg', data.message || 'حدث خطأ أثناء إنشاء الحساب', 'danger');
-        }
+        showMessage('devAuthMsg', 'تم إنشاء حساب المطور بنجاح!', 'success');
+        
+        setTimeout(() => {
+            showDeveloperDashboard();
+        }, 1500);
         
     } catch (error) {
         console.error('Error registering developer:', error);
-        showMessage('devAuthMsg', 'حدث خطأ أثناء الاتصال بالسيرفر', 'danger');
+        showMessage('devAuthMsg', 'حدث خطأ أثناء إنشاء الحساب', 'danger');
     }
 }
 
-// تسجيل الدخول للمطور مع السيرفر
+// تسجيل الدخول للمطور
 async function loginDeveloper() {
     const email = document.getElementById('devLoginEmail').value;
     const password = document.getElementById('devLoginPassword').value;
@@ -1410,111 +1375,76 @@ async function loginDeveloper() {
     }
     
     try {
-        const response = await fetch(`${API_BASE_URL}/auth/login`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                email,
-                password
-            })
-        });
+        // محاكاة تسجيل الدخول
+        const developer = {
+            id: generateId(),
+            name: 'مطور CAPNCom',
+            email: email,
+            role: 'developer',
+            createdAt: new Date().toISOString()
+        };
         
-        const data = await response.json();
-        
-        if (response.ok) {
-            // حفظ التوكن والمعلومات
-            localStorage.setItem('authToken', data.token);
-            localStorage.setItem('userRole', data.user.role);
-            
-            currentUser = data.user;
-            userRole = data.user.role;
-            
-            showDeveloperDashboard();
-        } else {
-            showMessage('devLoginMsg', data.message || 'البريد الإلكتروني أو كلمة المرور غير صحيحة', 'danger');
-        }
+        currentUser = developer;
+        saveUserLocal(developer);
+        showDeveloperDashboard();
         
     } catch (error) {
         console.error('Error logging in:', error);
-        showMessage('devLoginMsg', 'حدث خطأ أثناء الاتصال بالسيرفر', 'danger');
+        showMessage('devLoginMsg', 'حدث خطأ أثناء تسجيل الدخول', 'danger');
     }
 }
 
-// تسجيل المستخدم مع السيرفر
+// تسجيل المستخدم
 async function registerUser() {
     const name = document.getElementById('userName').value || 'مستخدم مجهول';
-    const email = document.getElementById('userEmail').value || `user_${Date.now()}@capncom.com`;
+    const email = document.getElementById('userEmail').value || `user_${generateId()}@capncom.com`;
     
     try {
-        const response = await fetch(`${API_BASE_URL}/auth/register/user`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                name,
-                email,
-                role: 'user',
-                isAnonymous: !document.getElementById('userEmail').value
-            })
-        });
+        const user = {
+            id: generateId(),
+            name: name,
+            email: email,
+            role: 'user',
+            createdAt: new Date().toISOString(),
+            isAnonymous: !document.getElementById('userEmail').value
+        };
         
-        const data = await response.json();
+        // حفظ محلي
+        saveUserLocal(user);
+        currentUser = user;
         
-        if (response.ok) {
-            // حفظ التوكن والمعلومات
-            localStorage.setItem('authToken', data.token);
-            localStorage.setItem('userRole', 'user');
-            
-            currentUser = data.user;
-            userRole = 'user';
-            
-            showMessage('userAuthMsg', 'تم إنشاء حساب المستخدم بنجاح!', 'success');
-            
-            setTimeout(() => {
-                showUserDashboard();
-            }, 1500);
-        } else {
-            showMessage('userAuthMsg', data.message || 'حدث خطأ أثناء إنشاء الحساب', 'danger');
-        }
+        showMessage('userAuthMsg', 'تم إنشاء حساب المستخدم بنجاح!', 'success');
+        
+        setTimeout(() => {
+            showUserDashboard();
+        }, 1500);
         
     } catch (error) {
         console.error('Error registering user:', error);
-        showMessage('userAuthMsg', 'حدث خطأ أثناء الاتصال بالسيرفر', 'danger');
+        showMessage('userAuthMsg', 'حدث خطأ أثناء إنشاء الحساب', 'danger');
     }
 }
 
-// الدخول كمستخدم مجهول مع السيرفر
-async function loginAsAnonymousUser() {
-    try {
-        const response = await fetch(`${API_BASE_URL}/auth/anonymous`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            // حفظ التوكن والمعلومات
-            localStorage.setItem('authToken', data.token);
-            localStorage.setItem('userRole', 'user');
-            
-            currentUser = data.user;
-            userRole = 'user';
-            
-            showUserDashboard();
-        } else {
-            showMessage('userAuthMsg', 'حدث خطأ أثناء إنشاء الحساب المجهول', 'danger');
-        }
-        
-    } catch (error) {
-        console.error('Error creating anonymous user:', error);
-        showMessage('userAuthMsg', 'حدث خطأ أثناء الاتصال بالسيرفر', 'danger');
-    }
+// الدخول كمستخدم مجهول
+function loginAsAnonymousUser() {
+    const user = {
+        id: generateId(),
+        name: 'مستخدم مجهول',
+        email: `anonymous_${generateId()}@capncom.com`,
+        role: 'user',
+        createdAt: new Date().toISOString(),
+        isAnonymous: true
+    };
+    
+    saveUserLocal(user);
+    currentUser = user;
+    showUserDashboard();
+}
+
+// حفظ المستخدم محلياً
+function saveUserLocal(user) {
+    localStorage.setItem('currentUser', JSON.stringify(user));
+    localStorage.setItem('userRole', user.role);
 }
 
 // عرض لوحة المطور
@@ -1634,7 +1564,7 @@ function handleImageUpload(event) {
     });
 }
 
-// نشر التطبيق مع السيرفر
+// نشر التطبيق
 async function publishApp() {
     const appName = document.getElementById('appName').value;
     const appDescription = document.getElementById('appDescription').value;
@@ -1676,59 +1606,59 @@ async function publishApp() {
     publishBtn.disabled = true;
     
     try {
-        const token = localStorage.getItem('authToken');
+        // محاكاة رفع التطبيق
         
-        // إنشاء FormData لإرسال الملفات
-        const formData = new FormData();
-        formData.append('name', appName);
-        formData.append('description', appDescription);
-        formData.append('category', appCategory);
-        formData.append('platforms', JSON.stringify(selectedPlatforms));
-        formData.append('file', appFile);
-        
-        // إضافة الصور
-        selectedAppImages.forEach((image, index) => {
-            formData.append('images', image);
-        });
-        
-        const response = await fetch(`${API_BASE_URL}/apps`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`
-            },
-            body: formData
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            // محاكاة التقدم
-            let progress = 0;
-            const progressInterval = setInterval(() => {
-                progress += 5;
-                progressBar.style.width = progress + '%';
-                progressText.textContent = progress + '%';
+        // محاكاة التقدم
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+            progress += 5;
+            progressBar.style.width = progress + '%';
+            progressText.textContent = progress + '%';
+            
+            if (progress >= 100) {
+                clearInterval(progressInterval);
                 
-                if (progress >= 100) {
-                    clearInterval(progressInterval);
+                // إنشاء بيانات التطبيق
+                const appData = {
+                    id: generateId(),
+                    name: appName,
+                    description: appDescription,
+                    category: appCategory,
+                    fileName: appFile.name,
+                    fileSize: appFile.size,
+                    images: selectedAppImages.map((file, index) => 
+                        URL.createObjectURL(file)
+                    ),
+                    platforms: {...selectedPlatforms},
+                    developerId: currentUser.id,
+                    developerName: currentUser.name,
+                    uploadDate: new Date().toLocaleString('ar-SA'),
+                    downloads: 0,
+                    rating: Math.floor(Math.random() * 5) + 1,
+                    reviews: [],
+                    type: 'app',
+                    createdAt: new Date().toISOString()
+                };
+                
+                // حفظ محلي
+                const existingApps = JSON.parse(localStorage.getItem('capncom_apps') || '[]');
+                existingApps.push(appData);
+                localStorage.setItem('capncom_apps', JSON.stringify(existingApps));
+                
+                // عرض رسالة النجاح
+                showMessage('uploadMsg', 'تم نشر التطبيق بنجاح!', 'success');
+                
+                // إعادة تعيين النموذج
+                setTimeout(() => {
+                    resetUploadForm();
+                    uploadProgress.style.display = 'none';
+                    publishBtn.disabled = false;
                     
-                    // عرض رسالة النجاح
-                    showMessage('uploadMsg', 'تم نشر التطبيق بنجاح!', 'success');
-                    
-                    // إعادة تعيين النموذج
-                    setTimeout(() => {
-                        resetUploadForm();
-                        uploadProgress.style.display = 'none';
-                        publishBtn.disabled = false;
-                        
-                        // إعادة تحميل قائمة التطبيقات
-                        loadDeveloperApps();
-                    }, 1000);
-                }
-            }, 100);
-        } else {
-            throw new Error(data.message || 'فشل في نشر التطبيق');
-        }
+                    // إعادة تحميل قائمة التطبيقات
+                    loadDeveloperApps();
+                }, 1000);
+            }
+        }, 100);
         
     } catch (error) {
         console.error('خطأ في نشر التطبيق:', error);
@@ -1738,40 +1668,30 @@ async function publishApp() {
     }
 }
 
-// تحميل تطبيقات المطور من السيرفر
+// تحميل تطبيقات المطور
 async function loadDeveloperApps() {
     const appsList = document.getElementById('developerAppsList');
     
     try {
-        const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE_URL}/apps/my-apps`, {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
+        const existingApps = JSON.parse(localStorage.getItem('capncom_apps') || '[]');
+        const developerApps = existingApps.filter(app => app.developerId === currentUser.id);
         
-        if (response.ok) {
-            const developerApps = await response.json();
-            
-            if (developerApps.length === 0) {
-                appsList.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-box-open"></i>
-                        <h3>لا توجد تطبيقات منشورة بعد</h3>
-                        <p>ابدأ بنشر أول تطبيق لك</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            appsList.innerHTML = '';
-            developerApps.forEach(app => {
-                const appElement = createAppElement(app, true);
-                appsList.appendChild(appElement);
-            });
-        } else {
-            throw new Error('فشل في تحميل التطبيقات');
+        if (developerApps.length === 0) {
+            appsList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-box-open"></i>
+                    <h3>لا توجد تطبيقات منشورة بعد</h3>
+                    <p>ابدأ بنشر أول تطبيق لك</p>
+                </div>
+            `;
+            return;
         }
+        
+        appsList.innerHTML = '';
+        developerApps.forEach(app => {
+            const appElement = createAppElement(app, true);
+            appsList.appendChild(appElement);
+        });
         
     } catch (error) {
         console.error('Error loading developer apps:', error);
@@ -1779,35 +1699,73 @@ async function loadDeveloperApps() {
     }
 }
 
-// تحميل جميع التطبيقات من السيرفر
+// تحميل جميع التطبيقات
 async function loadAllApps() {
     const appsGrid = document.getElementById('appsGrid');
     
     try {
-        const response = await fetch(`${API_BASE_URL}/apps`);
+        const existingApps = JSON.parse(localStorage.getItem('capncom_apps') || '[]');
+        allApps = existingApps;
         
-        if (response.ok) {
-            allApps = await response.json();
-            
-            if (allApps.length === 0) {
-                appsGrid.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-box-open"></i>
-                        <h3>لا توجد تطبيقات متاحة حالياً</h3>
-                        <p>كن أول من ينشر تطبيق!</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            appsGrid.innerHTML = '';
-            allApps.forEach(app => {
-                const appElement = createAppElement(app, false);
-                appsGrid.appendChild(appElement);
-            });
-        } else {
-            throw new Error('فشل في تحميل التطبيقات');
+        if (allApps.length === 0) {
+            // إضافة تطبيقات تجريبية
+            allApps = [
+                {
+                    id: '1',
+                    name: 'تطبيق التواصل الاجتماعي',
+                    description: 'تطبيق رائع للتواصل مع الأصدقاء والعائلة',
+                    category: 'social',
+                    fileName: 'social_app.apk',
+                    fileSize: 25487632,
+                    images: [],
+                    platforms: { android: 'أندرويد 5.0 أو أعلى', ios: 'iOS 12.0 أو أعلى' },
+                    developerId: 'dev1',
+                    developerName: 'فريق التطوير',
+                    uploadDate: '2024-01-15',
+                    downloads: 1250,
+                    rating: 4,
+                    reviews: [],
+                    type: 'app',
+                    createdAt: new Date().toISOString()
+                },
+                {
+                    id: '2',
+                    name: 'لعبة الألغاز المثيرة',
+                    description: 'لعبة ألغاز مسلية لتحدي الذكاء والمنطق',
+                    category: 'games',
+                    fileName: 'puzzle_game.apk',
+                    fileSize: 18765432,
+                    images: [],
+                    platforms: { android: 'أندرويد 6.0 أو أعلى' },
+                    developerId: 'dev2',
+                    developerName: 'مطور الألعاب',
+                    uploadDate: '2024-01-10',
+                    downloads: 890,
+                    rating: 5,
+                    reviews: [],
+                    type: 'app',
+                    createdAt: new Date().toISOString()
+                }
+            ];
+            localStorage.setItem('capncom_apps', JSON.stringify(allApps));
         }
+        
+        if (allApps.length === 0) {
+            appsGrid.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-box-open"></i>
+                    <h3>لا توجد تطبيقات متاحة حالياً</h3>
+                    <p>كن أول من ينشر تطبيق!</p>
+                </div>
+            `;
+            return;
+        }
+        
+        appsGrid.innerHTML = '';
+        allApps.forEach(app => {
+            const appElement = createAppElement(app, false);
+            appsGrid.appendChild(appElement);
+        });
         
     } catch (error) {
         console.error('Error loading apps:', error);
@@ -1951,36 +1909,23 @@ function showAppDetails(app) {
     `;
 }
 
-// تحميل التطبيق من السيرفر
+// تحميل التطبيق
 async function downloadApp(appId) {
     try {
-        const token = localStorage.getItem('authToken');
-        
         // زيادة عداد التحميلات
-        await fetch(`${API_BASE_URL}/apps/${appId}/download`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
+        const existingApps = JSON.parse(localStorage.getItem('capncom_apps') || '[]');
+        const appIndex = existingApps.findIndex(app => app.id === appId);
         
-        // الحصول على رابط التحميل
-        const response = await fetch(`${API_BASE_URL}/apps/${appId}/download-url`);
-        if (response.ok) {
-            const data = await response.json();
-            
-            // بدء التحميل
-            const link = document.createElement('a');
-            link.href = data.downloadUrl;
-            link.download = currentAppDetails.fileName;
-            link.click();
-            
-            showMessage('downloadMsg', 'بدأ تحميل التطبيق: ' + currentAppDetails.name, 'success');
+        if (appIndex !== -1) {
+            existingApps[appIndex].downloads = (existingApps[appIndex].downloads || 0) + 1;
+            localStorage.setItem('capncom_apps', JSON.stringify(existingApps));
         }
+        
+        // محاكاة التحميل
+        alert('بدأ تحميل التطبيق: ' + currentAppDetails.name);
         
     } catch (error) {
         console.error('Error downloading app:', error);
-        showMessage('downloadMsg', 'حدث خطأ أثناء تحميل التطبيق', 'danger');
     }
 }
 
@@ -2145,7 +2090,7 @@ function goBackToWelcome() {
 function logout() {
     currentUser = null;
     userRole = null;
-    localStorage.removeItem('authToken');
+    localStorage.removeItem('currentUser');
     localStorage.removeItem('userRole');
     showScreen('welcomeScreen');
 }
